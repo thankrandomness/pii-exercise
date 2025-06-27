@@ -4,7 +4,7 @@ This repository implements a serverless pipeline for redacting personally identi
 
 ---
 
-### System Design Diagram
+## System Design Diagram
 
 A detailed system design diagram shows the full data flow across:
 
@@ -19,8 +19,6 @@ A detailed system design diagram shows the full data flow across:
 
 The architecture is designed to process high-volume voice metadata files, redact sensitive content using Amazon Comprehend, validate using Macie, and continuously improve through feedback and retraining.
 
----
-
 ## 🔄 Data Flow Description
 
 ### 1. 📨 Raw File Ingestion
@@ -31,7 +29,6 @@ Files are uploaded to **`S3: Raw`**, which stores the unprocessed call transcrip
 - **Security**: Encrypted using SSE-KMS; bucket policies restrict access.
 - **Scalability**: Scales to petabytes of input volume without performance degradation.
 
----
 
 ### 2. 🧼 Redaction via Lambda + Comprehend
 
@@ -41,8 +38,6 @@ A new file triggers the **`Lambda: RedactPII`**, which uses **Amazon Comprehend*
 - **Security**: Lambda has scoped permissions to access only specific buckets and services.
 - **Scalability**: Redaction is event-driven and horizontally scalable.
 
----
-
 ### 3. 🕵️ Validation using Macie
 
 Redacted files are scanned by **Macie**, which checks for any residual PII. Findings are published to **`EventBridge: PII Leaks`**.
@@ -50,8 +45,6 @@ Redacted files are scanned by **Macie**, which checks for any residual PII. Find
 - **Justification**: Macie serves as an external quality gate and secondary classifier.
 - **Security**: Findings are logged and routed securely; sensitive access is audited.
 - **Scalability**: Macie supports both on-demand and scheduled scans at scale.
-
----
 
 ### 4. 🚨 Quarantine Pipeline
 
@@ -61,13 +54,9 @@ If Macie detects leaked PII, **`Lambda: Copy`** moves the original file to **`S3
 - **Security**: Quarantine access is tightly controlled for incident response teams.
 - **Scalability**: Each file is handled as an independent async event.
 
----
-
 ### 5. 🧪 Quarantine Re-Scan
 
 Quarantined files undergo another **Macie** scan. The findings are published to **`EventBridge: Quarantine`** for deeper inspection.
-
----
 
 ### 6. 🔁 Feedback Extraction
 
@@ -76,8 +65,6 @@ Quarantined files undergo another **Macie** scan. The findings are published to 
 - **Justification**: Enables self-improving redaction by learning from real data failures.
 - **Security**: Lambda has write-only access to the training path.
 - **Scalability**: Works efficiently at event scale; training data can be accumulated over time.
-
----
 
 ### 7. 🧠 Custom Entity Recognizer (CER)
 
@@ -99,4 +86,3 @@ The **Comprehend CER** is retrained using data from the training dataset, improv
 | CER Training Launch       | Trigger training job (manual or automated)            |
 | Model Deployment Approval | Validate updated model performance before redeploying |
 
----
