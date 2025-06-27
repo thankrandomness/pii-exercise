@@ -1,0 +1,15 @@
+[project]
+name = "pii-exercise"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "thankrandomness", email = "vijaybchakilam@gmail.com"},
+]
+dependencies = ["aws-cdk-lib>=2.202.0", "constructs>=10.4.2", "boto3>=1.38.45", "aws-cdk-aws-lambda-python-alpha>=2.202.0a0", "python-dotenv>=1.1.1"]
+requires-python = "==3.10.*"
+readme = "README.md"
+license = {text = "MIT"}
+
+
+[tool.pdm]
+distribution = false
