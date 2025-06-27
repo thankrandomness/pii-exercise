@@ -48,7 +48,7 @@ Redacted files are scanned by **Macie**, which checks for any residual PII. Find
 
 ### 4. 🚨 Quarantine Pipeline
 
-If Macie detects leaked PII, **`Lambda: Copy`** moves the original file to **`S3: Quarantine`** for investigation.
+If Macie detects leaked PII, **`Lambda: Copy Raw Data`** moves the original file to **`S3: Quarantine`** for investigation.
 
 - **Justification**: Prevents failed redactions from contaminating production data.
 - **Security**: Quarantine access is tightly controlled for incident response teams.
