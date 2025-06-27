@@ -1,6 +1,4 @@
-# 🛡️ PII Redaction Pipeline
-
-This repository implements a serverless pipeline for redacting personally identifiable information (PII) from voice metadata stored as JSON in S3. It uses Amazon Comprehend, Macie, and EventBridge to ensure privacy, compliance, and continuous model improvement.
+This repository implements a AWS cloud-native solution for redacting personally identifiable information (PII) from voice metadata stored as JSON in S3. The solution primarily uses Amazon Comprehend and Macie to ensure continuous model improvement and compliance.
 
 ---
 
