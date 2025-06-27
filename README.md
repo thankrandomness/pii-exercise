@@ -23,56 +23,61 @@ The architecture is designed to process high-volume voice metadata files, redact
 
 ### 1. 📨 Raw File Ingestion
 
-Files are uploaded to **`S3: Raw`**, which stores the unprocessed call transcripts.
+Raw JSON files containing up to 15,000 payloads each are uploaded daily to a structured S3 bucket. This triggers an EventBridge `Raw Upload` rule, which invokes a lightweight Lambda `SubmitRedactJob` responsible for submitting a Batch job `RedactPII` for redaction. This separation of concerns ensures that trigger logic remains minimal and scalable, while the heavy lifting is offloaded to the compute-efficient Batch job system
 
-- **Justification**: S3 is a durable, event-driven storage layer that integrates directly with Lambda.
-- **Security**: Encrypted using SSE-KMS; bucket policies restrict access.
-- **Scalability**: Scales to petabytes of input volume without performance degradation.
+### 2. 🧼 Redaction via Batch Job using Comprehend
 
+The redaction is performed using a Batch job `RedactPII` on AWS Fargate. It leverages a Comprehend Custom Entity Recognizer (CER) model to detect and redact PII from the sentence fields in each payload. The output is stored in a separate `S3: Redacted` bucket. Using a Batch Job allows for longer execution windows, and better performance when dealing with large files.
 
-### 2. 🧼 Redaction via Lambda + Comprehend
+### 3. 🕵️ Validation with Macie
 
-A new file triggers the **`Lambda: RedactPII`**, which uses **Amazon Comprehend** to detect and redact sensitive data. Redacted files are written to **`S3: Redacted`**.
+To verify redaction quality, files in `S3: Redacted` are asynchronously scanned by **Amazon Macie**, which uses ML to flag any residual PII. This creates a safety net over Comprehend and acts as an external layer of validation. Findings are routed to EventBridge `PII Leaks`, enabling downstream automation without tight coupling.
 
-- **Justification**: Lambda offers serverless, per-file parallelism. Comprehend supports PII detection out of the box.
-- **Security**: Lambda has scoped permissions to access only specific buckets and services.
-- **Scalability**: Redaction is event-driven and horizontally scalable.
+### 4. 🚨 Quarantine on Redaction Failures
 
-### 3. 🕵️ Validation using Macie
+When PII leaks are detected, EventBridge `PII Leaks` invokes a second Lambda `SubmitCopyJob` that submits the `CopyToQuarantine` Batch job. This job copies the original raw files (those linked to Macie-detected leaks) to a separate quarantine bucket. Using Batch here ensures the system can handle copying large numbers of files at once without running into Lambda limitations.
 
-Redacted files are scanned by **Macie**, which checks for any residual PII. Findings are published to **`EventBridge: PII Leaks`**.
+### 5. 🧪 Scan Quarantined Files with Macie
 
-- **Justification**: Macie serves as an external quality gate and secondary classifier.
-- **Security**: Findings are logged and routed securely; sensitive access is audited.
-- **Scalability**: Macie supports both on-demand and scheduled scans at scale.
+To extract patterns of missed PII, **Macie** scans the raw files in `S3: Quarantine`. These results — published to EventBridge `Quarantine` — provide valuable detail about redaction blind spots and failure causes, setting the stage for retraining the redaction logic.
 
-### 4. 🚨 Quarantine Pipeline
+### 6. 🔁 Feedback Pattern Extraction
 
-If Macie detects leaked PII, **`Lambda: Copy Raw Data`** moves the original file to **`S3: Quarantine`** for investigation.
+The EventBridge `Quarantine` rule triggers a final Lambda `SubmitFeedbackJob` to submit a Batch job for pattern extraction. The `ExtractPatterns` Batch job parses Macie’s findings from quarantined files, aligns them to raw input spans, and emits structured training examples to `S3: CER Training Dataset`. This builds a continuously growing dataset of edge-case PII examples, providing the raw material for a self-improving pipeline.
 
-- **Justification**: Prevents failed redactions from contaminating production data.
-- **Security**: Quarantine access is tightly controlled for incident response teams.
-- **Scalability**: Each file is handled as an independent async event.
+### 7. 🧠 Custom Entity Recognizer (CER) Retraining
 
-### 5. 🧪 Quarantine Re-Scan
+**Amazon Comprehend CER** periodically retrains using the examples written to `S3: CER Training Dataset`. By learning from Macie’s real-world failure cases, the system closes the loop — improving redaction quality over time without manual rule updates.
 
-Quarantined files undergo another **Macie** scan. The findings are published to **`EventBridge: Quarantine`** for deeper inspection.
+---
 
-### 6. 🔁 Feedback Extraction
+## 🔐 Security Considerations
 
-**`Lambda: Extract Patterns`** parses findings from Macie, extracts labeled examples, and writes them to **`S3: CER Training Dataset`**.
+The pipeline is designed to meet privacy and compliance standards.
 
-- **Justification**: Enables self-improving redaction by learning from real data failures.
-- **Security**: Lambda has write-only access to the training path.
-- **Scalability**: Works efficiently at event scale; training data can be accumulated over time.
+| Layer                       | Controls Applied                                         |
+|-----------------------------|----------------------------------------------------------|
+| **S3 Buckets**              | KMS encryption, block public access, fine-grained IAM    |
+| **Batch Jobs**              | Scoped roles with minimum privileges                     |
+| **Comprehend CER**          | Versioned deployments, isolated training roles           |
+| **Macie Findings**          | Routed via EventBridge; findings optionally encrypted    |
+| **SNS Notifications**       | Security team alerting on PII leak events                |
+| **Quarantine Isolation**    | Files with failed redactions are segregated for review   |
 
-### 7. 🧠 Custom Entity Recognizer (CER)
+---
 
-The **Comprehend CER** is retrained using data from the training dataset, improving future redaction precision.
+## 🚀 Scalability Strategy
 
-- **Justification**: CER allows adapting to domain-specific PII patterns.
-- **Security**: Training jobs run with isolated permissions and use versioned models.
-- **Scalability**: Managed by Comprehend; supports large training sets and retraining frequency as needed.
+This system is event-driven, scalable, and cloud-native.
+
+| Component                    | Scalability Characteristics                              |
+|------------------------------|----------------------------------------------------------|
+| **S3 Storage**               | Virtually unlimited file ingestion                       |
+| **Batch Jobs**.              | Robust to spikes in file volumes and size                |
+| **Comprehend**               | Fully managed service for training and inference         |
+| **Macie Scans**              | Scheduled or triggered asynchronous scans                |
+| **EventBridge Routing**      | Decouples logic, supports high-throughput routing        |
+| **Training Data Pipeline**   | Grows incrementally and supports batch retraining        |
 
 ---
 
