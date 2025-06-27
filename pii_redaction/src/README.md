@@ -32,10 +32,6 @@ pii-redaction-system/
 │       ├── payload_processor.py    # Individual payload coordination
 │       ├── file_processor.py       # File-level operations
 │       └── batch_orchestrator.py   # Main job orchestrator
-│
-├── tests/                          # Test files
-├── data/                           # Sample data
-└── docs/                           # Additional documentation
 ```
 
 ## Core Concepts
