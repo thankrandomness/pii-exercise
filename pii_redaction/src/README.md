@@ -116,7 +116,7 @@ Five redaction strategies for different use cases:
 ### Step 1: File Loading (`FileProcessor`)
 ```python
 # Load voice metadata JSON file
-payloads = load_json_file("voice_metadata.json")  # List of 15,000+ payloads
+payloads = load_json_file("voice_metadata.json")
 ```
 
 ### Step 2: Individual Payload Processing (`PayloadProcessor`)
